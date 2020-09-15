@@ -3,7 +3,9 @@ const pupeteer = require("puppeteer");
 const getImgUrl = (cachedHtml) => {
   let url = "";
 
-  const regexMatch = cachedHtml.match(/(?<=src=")([^"]+)(\.jpg|\.png|\.jpeg|\.gif)/);
+  const regexMatch = cachedHtml.match(
+    /(?<=src=")([^"]+)(\.jpg|\.png|\.jpeg|\.gif)/
+  );
   if (regexMatch) {
     url = regexMatch[0];
     url = url.replace("preview", "i");
@@ -28,37 +30,67 @@ const self = {
     });
   },
 
-  getResult: async (postsCount) => {
+  getResult: async (postCount) => {
+    let results = [];
+
+    do {
+      let nextResults = await self.parseResults();
+
+      results = [...results, ...nextResults];
+
+      const nextPageBtn = await self.page.$("span.next-button > a");
+
+      if (nextPageBtn && results.length < postCount) {
+        await nextPageBtn.click();
+        await self.page.waitForNavigation({ waitUntill: "networkidle0" });
+      } else {
+        break;
+      }
+    } while (results.length < postCount);
+
+    return results.slice(0, postCount);
+  },
+
+  parseResults: async () => {
+    const results = [];
+
     try {
       const elements = await self.page.$$('#siteTable > div[class*="thing"]');
 
       for (let element of elements) {
-        const title = await element.$eval('p.title > a', (node) =>
+        const title = await element.$eval("p.title > a", (node) =>
           node.innerText.trim()
         );
-        const score = await element.$eval('div.score.likes', (node) =>
+        const score = await element.$eval("div.score.likes", (node) =>
           node.innerText.trim()
         );
 
-
-        let cachedHtml = '';
-        if (await element.$('div.expando.expando-uninitialized') !== null) {
-          cachedHtml = await element.$eval(
-            'div.expando.expando-uninitialized',
-            (el) => el.getAttribute("data-cachedhtml")
+        let cachedHtml = "";
+        const expandHandler = await element.$(
+          "div.expando.expando-uninitialized"
+        );
+        if (expandHandler) {
+          const data = await expandHandler.evaluate((el) =>
+            el.getAttribute("data-cachedhtml")
           );
+
+          if (data) cachedHtml = data;
         }
-   
+
         const imgUrl = getImgUrl(cachedHtml);
 
-        console.log(`title: ${title}`);
-        console.log(`score: ${score}`);
-        console.log(`imgUrl: ${imgUrl}`);
+        results.push({
+          title,
+          score,
+          imgUrl,
+        });
       }
     } catch (e) {
-      console.log(`getResult error`);
+      console.log(`parseResult error`);
       console.log(e);
     }
+
+    return results;
   },
 };
 

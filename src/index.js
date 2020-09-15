@@ -1,8 +1,12 @@
-const reddit = require('./reddit');
+const reddit = require("./reddit");
 
 (async () => {
-  const subreddit = 'node';
+  const subreddit = "node";
+  const postCount = 50;
+
   await reddit.initialize(subreddit);
-  await reddit.getResult();
+  const posts = await reddit.getResult(postCount);
+
+  console.log(posts);
   debugger;
-})()
+})();
